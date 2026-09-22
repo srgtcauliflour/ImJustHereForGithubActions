@@ -1,0 +1,96 @@
+name: ProjectOrchid Inspect
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_url:
+        description: "Public APK download URL"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download source package
+        env:
+          SOURCE_URL: ${{ inputs.source_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p work report payload
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 30 \
+            -A "Mozilla/5.0" "$SOURCE_URL" -o work/source.apk
+          file work/source.apk | tee report/file.txt
+          stat -c '%s bytes' work/source.apk | tee report/size.txt
+          sha256sum work/source.apk | tee report/sha256.txt
+          unzip -t work/source.apk >/dev/null
+
+      - name: Inventory APK and locate RenPy payload
+        run: |
+          set -euo pipefail
+          unzip -l work/source.apk > report/apk-layout.txt
+          grep -Ei '(^|/)(game|renpy)/|\.rpa$|\.rpyc?$|renpy|python' report/apk-layout.txt             > report/renpy-candidates.txt || true
+          unzip -q work/source.apk -d work/apk
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re, shutil
+          root=Path("work/apk")
+          out=Path("payload")
+          out.mkdir(exist_ok=True)
+          candidates=[]
+          for p in root.rglob("*"):
+              if not p.is_file(): continue
+              s=p.as_posix().lower()
+              if p.suffix.lower() in {".rpa",".rpy",".rpyc"} or "/game/" in s or "renpy" in s:
+                  candidates.append(str(p.relative_to(root)))
+              # Copy game assets/scripts while preserving relative layout.
+              if "/game/" in s or s.startswith("game/") or p.suffix.lower() in {".rpa",".rpy",".rpyc"}:
+                  rel=p.relative_to(root)
+                  q=out/rel
+                  q.parent.mkdir(parents=True,exist_ok=True)
+                  shutil.copy2(p,q)
+          Path("report/candidates.json").write_text(json.dumps(candidates,indent=2))
+          version_hits=[]
+          pat=re.compile(rb'Ren.Py\s+(\d+\.\d+(?:\.\d+)?)',re.I)
+          for p in root.rglob("*"):
+              if not p.is_file() or p.stat().st_size > 50_000_000: continue
+              try: data=p.read_bytes()
+              except: continue
+              for m in pat.finditer(data):
+                  version_hits.append({"file":str(p.relative_to(root)),"version":m.group(1).decode()})
+          Path("report/renpy-version-hints.json").write_text(json.dumps(version_hits[:500],indent=2))
+          PY
+
+          du -ah payload | sort -h > report/payload-sizes.txt || true
+          find payload -type f | sort > report/payload-files.txt
+          printf 'Candidate files: '; wc -l < report/renpy-candidates.txt
+          printf 'Extracted payload files: '; wc -l < report/payload-files.txt
+
+      - name: Package report
+        run: |
+          tar -czf ProjectOrchid-report.tar.gz report
+          tar -czf ProjectOrchid-payload.tar.gz payload
+
+      - name: Upload inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-report
+          path: ProjectOrchid-report.tar.gz
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload extracted payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-payload
+          path: ProjectOrchid-payload.tar.gz
+          compression-level: 0
+          retention-days: 3
