@@ -65,7 +65,10 @@ jobs:
               if p.suffix.lower() in {".rpa",".rpy",".rpyc"} or "/game/" in s or "renpy" in s:
                   candidates.append(str(p.relative_to(root)))
               # Copy game assets/scripts while preserving relative layout.
-              if "/game/" in s or s.startswith("game/") or p.suffix.lower() in {".rpa",".rpy",".rpyc"}:
+              # Ren'Py Android packages produced by newer toolchains obfuscate
+              # asset paths as assets/x-game/x-... . Preserve the entire x-game
+              # tree; it contains scripts, images, audio and video.
+              if s.startswith("assets/x-game/") or s.startswith("assets/game/") or "/game/" in s or s.startswith("game/") or p.suffix.lower() in {".rpa",".rpy",".rpyc"}:
                   rel=p.relative_to(root)
                   q=out/rel
                   q.parent.mkdir(parents=True,exist_ok=True)
@@ -90,7 +93,8 @@ jobs:
       - name: Package report
         run: |
           tar -czf ProjectOrchid-report.tar.gz report
-          tar -czf ProjectOrchid-payload.tar.gz payload
+          # Game media is already compressed; gzip wastes runner CPU for ~1 GB.
+          tar -cf ProjectOrchid-payload.tar payload
 
       - name: Upload inspection report
         uses: actions/upload-artifact@v4
@@ -104,6 +108,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ProjectOrchid-payload
-          path: ProjectOrchid-payload.tar.gz
+          path: ProjectOrchid-payload.tar
           compression-level: 0
           retention-days: 3
