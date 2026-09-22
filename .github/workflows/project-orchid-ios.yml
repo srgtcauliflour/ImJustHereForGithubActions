@@ -82,7 +82,8 @@ jobs:
           set -euxo pipefail
           SDK="$PWD/renpy-${RENPY_VERSION}-sdk"
           chmod +x "$SDK/renpy.sh"
-          "$SDK/renpy.sh" launcher ios_create "$PWD/recovered" "$PWD/ProjectOrchid-iOS"
+          # renpy.sh expects the project directory first. The CLI command follows it.
+          "$SDK/renpy.sh" "$PWD/recovered" ios_create "$PWD/ProjectOrchid-iOS"
           find ProjectOrchid-iOS -maxdepth 2 -type d -print
           find ProjectOrchid-iOS -maxdepth 1 -name '*.xcodeproj' -print
           du -sh ProjectOrchid-iOS/base
