@@ -25,8 +25,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p work report payload
-          curl -fL --retry 5 --retry-all-errors --connect-timeout 30 \
-            -A "Mozilla/5.0" "$SOURCE_URL" -o work/source.apk
+          SOURCE_URL="$(printf '%s' "$SOURCE_URL" | xargs)"
+          echo "Source host: $(python3 -c 'import sys,urllib.parse; print(urllib.parse.urlparse(sys.argv[1]).netloc)' "$SOURCE_URL")"
+
+          if [[ "$SOURCE_URL" =~ drive\.google\.com/file/d/([^/?#]+) ]]; then
+            FILE_ID="${BASH_REMATCH[1]}"
+            python3 -m pip install --quiet --disable-pip-version-check gdown
+            python3 -m gdown "$FILE_ID" -O work/source.apk
+          elif [[ "$SOURCE_URL" =~ drive\.google\.com/.*[?\&]id=([^\&#]+) ]]; then
+            FILE_ID="${BASH_REMATCH[1]}"
+            python3 -m pip install --quiet --disable-pip-version-check gdown
+            python3 -m gdown "$FILE_ID" -O work/source.apk
+          else
+            curl -fL --retry 5 --retry-all-errors --connect-timeout 30 \
+              -A "Mozilla/5.0" "$SOURCE_URL" -o work/source.apk
+          fi
           file work/source.apk | tee report/file.txt
           stat -c '%s bytes' work/source.apk | tee report/size.txt
           sha256sum work/source.apk | tee report/sha256.txt
