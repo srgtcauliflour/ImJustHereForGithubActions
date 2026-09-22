@@ -68,7 +68,9 @@ jobs:
               # Ren'Py Android packages produced by newer toolchains obfuscate
               # asset paths as assets/x-game/x-... . Preserve the entire x-game
               # tree; it contains scripts, images, audio and video.
-              if s.startswith("assets/x-game/") or s.startswith("assets/game/") or "/game/" in s or s.startswith("game/") or p.suffix.lower() in {".rpa",".rpy",".rpyc"}:
+              # p.as_posix() includes the work/apk prefix, so match the asset
+              # component anywhere in the relative path rather than startswith.
+              if "/assets/x-game/" in s or "/assets/game/" in s or "/game/" in s or p.suffix.lower() in {".rpa",".rpy",".rpyc"}:
                   rel=p.relative_to(root)
                   q=out/rel
                   q.parent.mkdir(parents=True,exist_ok=True)
