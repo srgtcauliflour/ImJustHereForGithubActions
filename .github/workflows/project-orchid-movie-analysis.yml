@@ -219,7 +219,7 @@ jobs:
           # without simply preferring the longest branch.
           media_by_label={}
           for m in media:
-              media_by_label.setdefault(m["label"],set()).add(m.get("media") or m.get("ref") or str(m))
+              media_by_label.setdefault(m["label"],set()).add(m.get("path") or m.get("media") or m.get("ref") or str(m))
           def reachable(start,limit=160):
               d=distances(start,limit)
               return set(d)
@@ -336,7 +336,7 @@ jobs:
           for m in media:
               e=timeline_by_label.get(m["label"])
               if not e: continue
-              ref=m.get("media") or m.get("ref")
+              ref=m.get("path") or m.get("media") or m.get("ref")
               if not ref: continue
               low=str(ref).lower()
               if low.endswith((".mp3",".ogg",".opus",".wav")):
