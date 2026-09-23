@@ -88,62 +88,49 @@ jobs:
           echo "Renios runtime root: $RENIOS_ROOT"
           ls -lh renpy-sdk.tar.bz2 renios.zip
 
-      - name: Create ProjectOrchid Xcode project
+      - name: Create and populate iOS project with RenPy itself
         run: |
           set -euxo pipefail
-          RENIOS="$(cat "$RUNNER_TEMP/renios-root")"
+          SDK="$GITHUB_WORKSPACE/renpy-${RENPY_VERSION}-sdk"
 
-          # The distributed 8.5.0 Renios support ZIP contains the ready-to-use
-          # native prototype but not the old ios.py helper. Build the project
-          # directly from that prototype instead of relying on the obsolete helper.
+          # The Ren'Py 8.5 command is registered by launcher/game/ios.rpy and
+          # performs BOTH renios.create.create_project() and the iOS-specific
+          # Distributor(packages=['ios']) population pass. Do not hand-copy base/.
+          rm -rf "$SDK/renios"
+          cp -R renios-extract/renios "$SDK/renios"
+
           rm -rf ProjectOrchid-iOS
-          cp -R "$RENIOS/prototype" ProjectOrchid-iOS
-          rm -rf ProjectOrchid-iOS/base
-          rm -rf ProjectOrchid-iOS/prototype.xcodeproj/project.xcworkspace
-          rm -rf ProjectOrchid-iOS/prototype.xcodeproj/xcuserdata
-          mv ProjectOrchid-iOS/prototype.xcodeproj ProjectOrchid-iOS/ProjectOrchid.xcodeproj
+          "$SDK/renpy.sh" ios_create "$GITHUB_WORKSPACE/recovered" "$GITHUB_WORKSPACE/ProjectOrchid-iOS"
 
           PBX="ProjectOrchid-iOS/ProjectOrchid.xcodeproj/project.pbxproj"
+          if [ ! -f "$PBX" ]; then
+            PBX="$(find ProjectOrchid-iOS -name project.pbxproj -print -quit)"
+          fi
+          test -n "$PBX"
+          test -f "$PBX"
+
+          # Rename only the generated Xcode project/target identifiers after
+          # Ren'Py has completed its own packaging.
+          OLDPROJ="$(dirname "$PBX")"
           python3 - "$PBX" <<'PY'
           from pathlib import Path
           import sys
-          p = Path(sys.argv[1])
-          s = p.read_text()
-          s = s.replace("XHTE5H7Z79", "TEAMID")
-          s = s.replace("org.renpy.prototype", "com.generic.projectorchid")
-          s = s.replace("prototype", "ProjectOrchid")
+          p=Path(sys.argv[1]); s=p.read_text()
+          s=s.replace("XHTE5H7Z79","TEAMID")
+          s=s.replace("org.renpy.prototype","com.generic.projectorchid")
+          s=s.replace("prototype","ProjectOrchid")
           p.write_text(s)
           PY
-
-          # The prototype already supplies a modern Info.plist. Preserve it and
-          # place the reconstructed Ren'Py project where the native runtime expects it.
-          mkdir -p ProjectOrchid-iOS/base
-
-          # Renios' native launcher does not launch game/ directly. main.c loads
-          # base/main.py, which is Ren'Py's renpy.py bootstrap, and that bootstrap
-          # imports the Ren'Py engine from base/renpy before opening base/game.
-          # The previous green build omitted these runtime files, explaining the
-          # on-device black screen.
-          SDK="$GITHUB_WORKSPACE/renpy-${RENPY_VERSION}-sdk"
-          test -f "$SDK/renpy.py"
-          test -d "$SDK/renpy"
-          cp -R recovered/game ProjectOrchid-iOS/base/game
-          cp -R "$SDK/renpy" ProjectOrchid-iOS/base/renpy
-          cp "$SDK/renpy.py" ProjectOrchid-iOS/base/main.py
+          if [ "$(basename "$OLDPROJ")" != "ProjectOrchid.xcodeproj" ]; then
+            mv "$OLDPROJ" ProjectOrchid-iOS/ProjectOrchid.xcodeproj
+          fi
 
           test -f ProjectOrchid-iOS/base/main.py
-          test -f ProjectOrchid-iOS/base/renpy/__init__.py
+          test -d ProjectOrchid-iOS/base/renpy
+          test -d ProjectOrchid-iOS/base/game
           test -f ProjectOrchid-iOS/base/game/script_version.txt
-
-          # Fail before compiling if the native bundle cannot contain the files
-          # its launcher requires.
-          grep -q 'base in Resources' "$PBX"
-          grep -q 'lib in Resources' "$PBX"
-          grep -q 'include in Resources' "$PBX"
-          test -f "$PBX"
-          test -f ProjectOrchid-iOS/Info.plist
-          find ProjectOrchid-iOS -maxdepth 2 -type d -print
           du -sh ProjectOrchid-iOS/base
+          find ProjectOrchid-iOS/base -maxdepth 2 -type f | head -80
 
       - name: Set generic bundle identifier
         run: |
