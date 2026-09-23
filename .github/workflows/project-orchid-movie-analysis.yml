@@ -100,6 +100,27 @@ jobs:
           md += ["","## Unresolved targets"]+[f"- {x}" for x in report["unresolved_targets"]]
           Path("movie-analysis/REPORT.md").write_text("\n".join(md))
           print(json.dumps(report,indent=2))
+
+          # Produce a second-pass shortlist of choices that are likely to matter
+          # to a linear main-film route. This is deliberately conservative:
+          # choices are retained for editorial review rather than auto-selected.
+          by_label={}
+          for m in menus: by_label.setdefault(m["label"],[]).append(m)
+          critical=[]
+          for label,items in by_label.items():
+              outs=[e for e in edges if e["from"]==label]
+              targets=sorted({e["to"] for e in outs})
+              critical.append({
+                  "label":label,
+                  "choices":[i["choice"] for i in items],
+                  "explicit_targets":targets,
+                  "choice_count":len(items),
+                  "target_count":len(targets),
+                  "likely_story_altering": len(targets)>1,
+              })
+          Path("movie-analysis/choice-review.json").write_text(json.dumps(critical,indent=2))
+          print("Choice groups:",len(critical))
+          print("Likely story-altering groups:",sum(1 for x in critical if x["likely_story_altering"]))
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
