@@ -41,7 +41,7 @@ jobs:
           "$RUNNER_TEMP/movie-venv/bin/pip" install ./rpycdec
           mkdir -p movie-analysis/decompiled
           cp -R recovered/game/scripts/story movie-analysis/decompiled/story
-          rpycdec decompile movie-analysis/decompiled/story
+          "$RUNNER_TEMP/movie-venv/bin/rpycdec" decompile movie-analysis/decompiled/story
 
       - name: Build branch graph and media manifest
         run: |
