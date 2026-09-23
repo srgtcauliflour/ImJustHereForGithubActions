@@ -167,6 +167,52 @@ jobs:
           print("Choice groups:",len(critical))
           print("Likely story-altering groups:",sum(1 for x in critical if x["likely_story_altering"]))
           print("Film-critical candidates after convergence analysis:",len(film_candidates))
+
+          # Build an editorial skeleton for the first linear film. We preserve
+          # chapter/version order and structural branch information, while
+          # deliberately leaving route selection unresolved until candidate
+          # branches have been compared for continuity and pacing.
+          import re
+          story_labels=[]
+          for name,meta in labels.items():
+              fp=Path(meta["file"])
+              if "story" not in fp.parts: continue
+              m=re.search(r'v(\\d{2})',fp.stem.lower())
+              chapter=int(m.group(1)) if m else 0
+              story_labels.append({"chapter":chapter,"label":name,"file":str(fp),"line":meta["line"]})
+          story_labels.sort(key=lambda x:(x["chapter"],x["file"],x["line"]))
+          critical_names={x["label"] for x in film_candidates}
+          chapters=[]
+          for chapter in sorted({x["chapter"] for x in story_labels}):
+              rows=[x for x in story_labels if x["chapter"]==chapter]
+              chapters.append({
+                  "chapter":chapter,
+                  "entry_label":rows[0]["label"] if rows else None,
+                  "labels":[x["label"] for x in rows],
+                  "film_critical_choice_labels":[x["label"] for x in rows if x["label"] in critical_names],
+              })
+          skeleton={
+              "format":"ProjectOrchid main-film editorial skeleton v1",
+              "principles":[
+                  "preserve chronological chapter order",
+                  "prefer branches that maintain narrative continuity",
+                  "remove gameplay-only detours and rapidly reconverging choices",
+                  "retain unique consequential scenes when they materially affect later story",
+                  "pace dialogue faster than gameplay while preserving comprehension",
+                  "treat repeated video loops as edited montage material"
+              ],
+              "chapters":chapters,
+          }
+          Path("movie-analysis/main-film-skeleton.json").write_text(json.dumps(skeleton,indent=2))
+          md=["# Main Film Structure (draft)","",
+              "This is an editorial skeleton, not a final route selection.",
+              "Branches remain unresolved until convergence and downstream impact are reviewed.",""]
+          for ch in chapters:
+              md += [f"## Chapter {ch['chapter']:02d}",
+                     f"- Entry: {ch['entry_label']}",
+                     f"- Structural labels: {len(ch['labels'])}",
+                     f"- Film-critical choice candidates: {len(ch['film_critical_choice_labels'])}",""]
+          Path("movie-analysis/MAIN_FILM_STRUCTURE.md").write_text("\\n".join(md))
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
