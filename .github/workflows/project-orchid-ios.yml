@@ -27,16 +27,37 @@ jobs:
           sw_vers
           df -h
 
-      - name: Download source APK
+      - name: Restore cached source APK
+        id: source-cache
+        uses: actions/cache@v4
+        with:
+          path: source.apk
+          key: orchid-source-apk-3d6d711f9111239a8069c6b7a070c1ba3a514a26570f6f689afe51892667e429
+
+      - name: Download source APK on cache miss
+        if: steps.source-cache.outputs.cache-hit != 'true'
         run: |
           set -euxo pipefail
           python3 -m venv "$RUNNER_TEMP/orchid-venv"
           "$RUNNER_TEMP/orchid-venv/bin/python" -m pip install --upgrade pip
           "$RUNNER_TEMP/orchid-venv/bin/python" -m pip install gdown
-          "$RUNNER_TEMP/orchid-venv/bin/python" -m gdown "https://drive.google.com/uc?id=${DRIVE_FILE_ID}" -O source.apk
+          for attempt in 1 2 3 4; do
+            "$RUNNER_TEMP/orchid-venv/bin/python" -m gdown --fuzzy "https://drive.google.com/file/d/${DRIVE_FILE_ID}/view" -O source.apk && break
+            echo "Drive download attempt $attempt failed"
+            rm -f source.apk
+            sleep $((attempt * 15))
+          done
           test -s source.apk
+
+      - name: Verify source APK
+        run: |
+          set -euxo pipefail
+          test -s source.apk
+          EXPECTED=3d6d711f9111239a8069c6b7a070c1ba3a514a26570f6f689afe51892667e429
+          ACTUAL="$(shasum -a 256 source.apk | awk '{print $1}')"
+          echo "source.apk SHA-256: $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
           ls -lh source.apk
-          shasum -a 256 source.apk
 
       - name: Recover RenPy game tree
         run: |
