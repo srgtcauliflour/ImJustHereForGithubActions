@@ -134,6 +134,12 @@ jobs:
           test -f ProjectOrchid-iOS/base/main.py
           test -f ProjectOrchid-iOS/base/renpy/__init__.py
           test -f ProjectOrchid-iOS/base/game/script_version.txt
+
+          # Fail before compiling if the native bundle cannot contain the files
+          # its launcher requires.
+          grep -q 'base in Resources' "$PBX"
+          grep -q 'lib in Resources' "$PBX"
+          grep -q 'include in Resources' "$PBX"
           test -f "$PBX"
           test -f ProjectOrchid-iOS/Info.plist
           find ProjectOrchid-iOS -maxdepth 2 -type d -print
@@ -171,6 +177,28 @@ jobs:
           set -euxo pipefail
           rm -rf build
           xcodebuild             -project "${{ steps.scheme.outputs.project }}"             -scheme "${{ steps.scheme.outputs.scheme }}"             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM=""             PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_ID}"             build | tee xcodebuild.log
+
+      - name: Validate built app runtime before packaging
+        run: |
+          set -euxo pipefail
+          APP="$(find build/DerivedData/Build/Products -path '*Release-iphoneos/*.app' -type d -print -quit)"
+          test -n "$APP"
+          echo "Validating runtime payload in: $APP"
+          test -x "$APP/ProjectOrchid"
+          test -f "$APP/base/main.py"
+          test -f "$APP/base/renpy/__init__.py"
+          test -f "$APP/base/game/script_version.txt"
+          test -d "$APP/ios-python"
+          test -d "$APP/lib"
+          test -d "$APP/include"
+          echo "Bundle size:"
+          du -sh "$APP"
+          echo "Critical runtime files:"
+          ls -lh "$APP/base/main.py" "$APP/base/game/script_version.txt"
+          find "$APP/ios-python" -maxdepth 2 -type f | head -30
+          echo "Mach-O:"
+          file "$APP/ProjectOrchid"
+          otool -L "$APP/ProjectOrchid" | head -80
 
       - name: Package unsigned IPA
         run: |
