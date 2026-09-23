@@ -82,8 +82,32 @@ jobs:
           set -euxo pipefail
           SDK="$PWD/renpy-${RENPY_VERSION}-sdk"
           chmod +x "$SDK/renpy.sh"
-          # renpy.sh expects the project directory first. The CLI command follows it.
-          "$SDK/renpy.sh" "$PWD/recovered" ios_create "$PWD/ProjectOrchid-iOS"
+          # Renios is a separate project generator, not a renpy.py command.
+          # The downloaded support package includes ios.py and the prototype project.
+          test -f "$SDK/renios/ios.py"
+          test -d "$SDK/renios/prototype"
+          cd "$SDK/renios"
+
+          # Renios 8.5.0's generator is Python-2-era code. macOS runners no longer
+          # ship Python 2, so use the bundled Ren'Py Python where possible.
+          RENPY_PY="$SDK/lib/py3-mac-universal/python"
+          if [ ! -x "$RENPY_PY" ]; then
+            RENPY_PY="$SDK/lib/py3-mac-x86_64/python"
+          fi
+          if [ ! -x "$RENPY_PY" ]; then
+            echo "Bundled Ren'Py Python not found; available candidates:"
+            find "$SDK/lib" -maxdepth 3 -type f -name python -print || true
+            exit 2
+          fi
+
+          "$RENPY_PY" ios.py create "$GITHUB_WORKSPACE/ProjectOrchid-iOS"
+          cd "$GITHUB_WORKSPACE"
+
+          # Renios creates only the native shell. Populate its base/ directory
+          # with the recovered Ren'Py project expected by the runtime.
+          mkdir -p ProjectOrchid-iOS/base
+          cp -R recovered/. ProjectOrchid-iOS/base/
+
           find ProjectOrchid-iOS -maxdepth 2 -type d -print
           find ProjectOrchid-iOS -maxdepth 1 -name '*.xcodeproj' -print
           du -sh ProjectOrchid-iOS/base
