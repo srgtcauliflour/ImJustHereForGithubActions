@@ -193,7 +193,10 @@ jobs:
           APP="$(find build/DerivedData/Build/Products -path '*Release-iphoneos/*.app' -type d -print -quit)"
           test -n "$APP"
           echo "Validating runtime payload in: $APP"
-          test -x "$APP/ProjectOrchid"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          test -n "$EXECUTABLE"
+          echo "Bundle executable: $EXECUTABLE"
+          test -x "$APP/$EXECUTABLE"
           test -f "$APP/base/main.py"
           test -f "$APP/base/renpy/__init__.py"
           test -f "$APP/base/game/script_version.txt"
@@ -206,8 +209,8 @@ jobs:
           ls -lh "$APP/base/main.py" "$APP/base/game/script_version.txt"
           find "$APP/ios-python" -maxdepth 2 -type f | head -30
           echo "Mach-O:"
-          file "$APP/ProjectOrchid"
-          otool -L "$APP/ProjectOrchid" | head -80
+          file "$APP/$EXECUTABLE"
+          otool -L "$APP/$EXECUTABLE" | head -80
 
       - name: Package unsigned IPA
         run: |
