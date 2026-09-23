@@ -40,8 +40,11 @@ jobs:
           git clone --depth 1 --branch v0.2.0 https://github.com/cnfatal/rpycdec.git rpycdec
           "$RUNNER_TEMP/movie-venv/bin/pip" install ./rpycdec
           mkdir -p movie-analysis/decompiled
-          cp -R recovered/game/scripts/story movie-analysis/decompiled/story
-          "$RUNNER_TEMP/movie-venv/bin/rpycdec" decompile movie-analysis/decompiled/story
+          # Decompile all scripts, not only story/. The story graph calls helper
+          # labels defined elsewhere (profiles/update/replay etc.), and image/audio
+          # definitions outside story are required to resolve indirect media.
+          cp -R recovered/game/scripts movie-analysis/decompiled/scripts
+          "$RUNNER_TEMP/movie-venv/bin/rpycdec" decompile movie-analysis/decompiled/scripts
 
       - name: Build branch graph and media manifest
         run: |
@@ -50,8 +53,9 @@ jobs:
           cat > "$RUNNER_TEMP/analyse.py" <<'PY'
           from pathlib import Path
           import re, json, csv
-          root=Path("movie-analysis/decompiled/story")
+          root=Path("movie-analysis/decompiled/scripts")
           files=sorted(root.rglob("*.rpy"))
+          story_files=[p for p in files if "story" in p.parts]
           label_re=re.compile(r'^\s*label\s+([^\s(:]+)')
           jump_re=re.compile(r'^\s*(jump|call)\s+([^\s(]+)')
           menu_re=re.compile(r'^\s*menu(?:\s+[^:]*)?:\s*$')
@@ -84,7 +88,7 @@ jobs:
               if e["to"] in incoming: incoming[e["to"]]+=1
               if e["from"] in outgoing: outgoing[e["from"]]+=1
           report={
-            "script_files":len(files),"labels":len(labels),"explicit_edges":len(edges),
+            "script_files":len(files),"story_script_files":len(story_files),"labels":len(labels),"explicit_edges":len(edges),
             "menus":len(menus),"media_references":len(media),
             "branch_labels":[k for k,v in outgoing.items() if v>1],
             "unresolved_targets":sorted({e["to"] for e in edges if e["to"] not in labels})
@@ -95,7 +99,7 @@ jobs:
               with open("movie-analysis/"+name,"w",newline="") as f:
                   if rows:
                       w=csv.DictWriter(f,fieldnames=rows[0].keys()); w.writeheader(); w.writerows(rows)
-          md=["# ProjectOrchid Movie Story Analysis","",f"- Story scripts: {len(files)}",f"- Labels: {len(labels)}",f"- Explicit jump/call edges: {len(edges)}",f"- Menu choices: {len(menus)}",f"- Media references in story scripts: {len(media)}",f"- Unresolved explicit targets: {len(report['unresolved_targets'])}","","## Choices"]
+          md=["# ProjectOrchid Movie Story Analysis","",f"- Decompiled scripts: {len(files)}",f"- Story scripts: {len(story_files)}",f"- Labels: {len(labels)}",f"- Explicit jump/call edges: {len(edges)}",f"- Menu choices: {len(menus)}",f"- Media references in story scripts: {len(media)}",f"- Unresolved explicit targets: {len(report['unresolved_targets'])}","","## Choices"]
           md += [f"- **{x['label']}** — {x['choice']} ({Path(x['file']).name}:{x['line']})" for x in menus]
           md += ["","## Unresolved targets"]+[f"- {x}" for x in report["unresolved_targets"]]
           Path("movie-analysis/REPORT.md").write_text("\n".join(md))
