@@ -118,8 +118,22 @@ jobs:
           # The prototype already supplies a modern Info.plist. Preserve it and
           # place the reconstructed Ren'Py project where the native runtime expects it.
           mkdir -p ProjectOrchid-iOS/base
-          cp -R recovered/. ProjectOrchid-iOS/base/
 
+          # Renios' native launcher does not launch game/ directly. main.c loads
+          # base/main.py, which is Ren'Py's renpy.py bootstrap, and that bootstrap
+          # imports the Ren'Py engine from base/renpy before opening base/game.
+          # The previous green build omitted these runtime files, explaining the
+          # on-device black screen.
+          SDK="$GITHUB_WORKSPACE/renpy-${RENPY_VERSION}-sdk"
+          test -f "$SDK/renpy.py"
+          test -d "$SDK/renpy"
+          cp -R recovered/game ProjectOrchid-iOS/base/game
+          cp -R "$SDK/renpy" ProjectOrchid-iOS/base/renpy
+          cp "$SDK/renpy.py" ProjectOrchid-iOS/base/main.py
+
+          test -f ProjectOrchid-iOS/base/main.py
+          test -f ProjectOrchid-iOS/base/renpy/__init__.py
+          test -f ProjectOrchid-iOS/base/game/script_version.txt
           test -f "$PBX"
           test -f ProjectOrchid-iOS/Info.plist
           find ProjectOrchid-iOS -maxdepth 2 -type d -print
