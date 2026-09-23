@@ -70,59 +70,59 @@ jobs:
       - name: Download matching RenPy SDK and iOS support
         run: |
           set -euxo pipefail
-          curl -fL --retry 4 --retry-delay 5             "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-sdk.tar.bz2"             -o renpy-sdk.tar.bz2
-          curl -fL --retry 4 --retry-delay 5             "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-renios.zip"             -o renios.zip
+          curl -fL --retry 4 --retry-delay 5 \
+            "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-sdk.tar.bz2" \
+            -o renpy-sdk.tar.bz2
+          curl -fL --retry 4 --retry-delay 5 \
+            "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-renios.zip" \
+            -o renios.zip
           tar -xjf renpy-sdk.tar.bz2
-          # Ren'Py's distributed Renios archive layout can vary by release.
-          # Extract it separately, then discover the actual Renios root by ios.py.
           rm -rf renios-extract
           mkdir renios-extract
           unzip -q renios.zip -d renios-extract
-          RENIOS_ROOT="$(dirname "$(find "$PWD/renios-extract" -type f -name ios.py -print -quit)")"
-          if [ -z "$RENIOS_ROOT" ] || [ ! -f "$RENIOS_ROOT/ios.py" ]; then
-            echo "Unable to locate ios.py. Archive top-level layout:"
-            find renios-extract -maxdepth 3 -print | head -200
-            exit 2
-          fi
+
+          RENIOS_ROOT="$PWD/renios-extract/renios"
+          test -d "$RENIOS_ROOT/prototype"
+          test -f "$RENIOS_ROOT/prototype/prototype.xcodeproj/project.pbxproj"
           echo "$RENIOS_ROOT" > "$RUNNER_TEMP/renios-root"
-          echo "Renios root: $RENIOS_ROOT"
-          find "$RENIOS_ROOT" -maxdepth 2 -type f | head -80
+          echo "Renios runtime root: $RENIOS_ROOT"
           ls -lh renpy-sdk.tar.bz2 renios.zip
 
       - name: Create ProjectOrchid Xcode project
         run: |
           set -euxo pipefail
-          SDK="$PWD/renpy-${RENPY_VERSION}-sdk"
-          chmod +x "$SDK/renpy.sh"
-          # Renios is a separate project generator, not a renpy.py command.
-          # The downloaded support package includes ios.py and the prototype project.
           RENIOS="$(cat "$RUNNER_TEMP/renios-root")"
-          test -f "$RENIOS/ios.py"
-          test -d "$RENIOS/prototype"
-          cd "$RENIOS"
 
-          # Renios 8.5.0's generator is Python-2-era code. macOS runners no longer
-          # ship Python 2, so use the bundled Ren'Py Python where possible.
-          RENPY_PY="$SDK/lib/py3-mac-universal/python"
-          if [ ! -x "$RENPY_PY" ]; then
-            RENPY_PY="$SDK/lib/py3-mac-x86_64/python"
-          fi
-          if [ ! -x "$RENPY_PY" ]; then
-            echo "Bundled Ren'Py Python not found; available candidates:"
-            find "$SDK/lib" -maxdepth 3 -type f -name python -print || true
-            exit 2
-          fi
+          # The distributed 8.5.0 Renios support ZIP contains the ready-to-use
+          # native prototype but not the old ios.py helper. Build the project
+          # directly from that prototype instead of relying on the obsolete helper.
+          rm -rf ProjectOrchid-iOS
+          cp -R "$RENIOS/prototype" ProjectOrchid-iOS
+          rm -rf ProjectOrchid-iOS/base
+          rm -rf ProjectOrchid-iOS/prototype.xcodeproj/project.xcworkspace
+          rm -rf ProjectOrchid-iOS/prototype.xcodeproj/xcuserdata
+          mv ProjectOrchid-iOS/prototype.xcodeproj ProjectOrchid-iOS/ProjectOrchid.xcodeproj
 
-          "$RENPY_PY" ios.py create "$GITHUB_WORKSPACE/ProjectOrchid-iOS"
-          cd "$GITHUB_WORKSPACE"
+          PBX="ProjectOrchid-iOS/ProjectOrchid.xcodeproj/project.pbxproj"
+          python3 - "$PBX" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text()
+          s = s.replace("XHTE5H7Z79", "TEAMID")
+          s = s.replace("org.renpy.prototype", "com.generic.projectorchid")
+          s = s.replace("prototype", "ProjectOrchid")
+          p.write_text(s)
+          PY
 
-          # Renios creates only the native shell. Populate its base/ directory
-          # with the recovered Ren'Py project expected by the runtime.
+          # The prototype already supplies a modern Info.plist. Preserve it and
+          # place the reconstructed Ren'Py project where the native runtime expects it.
           mkdir -p ProjectOrchid-iOS/base
           cp -R recovered/. ProjectOrchid-iOS/base/
 
+          test -f "$PBX"
+          test -f ProjectOrchid-iOS/Info.plist
           find ProjectOrchid-iOS -maxdepth 2 -type d -print
-          find ProjectOrchid-iOS -maxdepth 1 -name '*.xcodeproj' -print
           du -sh ProjectOrchid-iOS/base
 
       - name: Set generic bundle identifier
