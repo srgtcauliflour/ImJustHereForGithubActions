@@ -42,7 +42,7 @@ jobs:
           "$RUNNER_TEMP/orchid-venv/bin/python" -m pip install --upgrade pip
           "$RUNNER_TEMP/orchid-venv/bin/python" -m pip install gdown
           for attempt in 1 2 3 4; do
-            "$RUNNER_TEMP/orchid-venv/bin/python" -m gdown --fuzzy "https://drive.google.com/file/d/${DRIVE_FILE_ID}/view" -O source.apk && break
+            "$RUNNER_TEMP/orchid-venv/bin/python" -m gdown "https://drive.google.com/uc?id=${DRIVE_FILE_ID}" -O source.apk && break
             echo "Drive download attempt $attempt failed"
             rm -f source.apk
             sleep $((attempt * 15))
