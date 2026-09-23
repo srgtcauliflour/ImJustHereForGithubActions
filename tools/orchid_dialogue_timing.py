@@ -9,10 +9,14 @@ data=json.loads(timeline_path.read_text())
 entries=data["entries"]
 by_label={e["label"]:e for e in entries}
 label_re=re.compile(r"^\\s*label\\s+([A-Za-z0-9_]+)\\s*:")
-say_re=re.compile(r'^\\s*(?:([A-Za-z_][A-Za-z0-9_.]*)\\s+)?(["\\x27])(.*?)\\2(?:\\s+\\([^)]*\\))?\\s*
+say_re=re.compile(r"""^\\s*(?:([A-Za-z_][A-Za-z0-9_.]*)\\s+)?(["\x27])(.*?)\\2(?:\\s+\\([^)]*\\))?\\s*$""")
 dialogue={}
 for fn in sorted(game.rglob("*.rpy")):
-    if "story" not in str(fn).lower():
+    try:
+        rel=fn.relative_to(game)
+    except ValueError:
+        rel=fn
+    if "story" not in [part.lower() for part in rel.parts]:
         continue
     active=None
     for line_no,line in enumerate(fn.read_text(errors="ignore").splitlines(),1):
