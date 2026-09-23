@@ -376,6 +376,7 @@ jobs:
           print("First-pass runtime seconds:",total)
           PY
           python3 "$RUNNER_TEMP/analyse.py"
+          python3 tools/orchid_dialogue_timing.py movie-analysis recovered/game
 
       - name: Upload movie analysis
         uses: actions/upload-artifact@v4
