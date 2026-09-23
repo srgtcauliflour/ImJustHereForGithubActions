@@ -73,11 +73,20 @@ jobs:
           curl -fL --retry 4 --retry-delay 5             "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-sdk.tar.bz2"             -o renpy-sdk.tar.bz2
           curl -fL --retry 4 --retry-delay 5             "https://www.renpy.org/dl/${RENPY_VERSION}/renpy-${RENPY_VERSION}-renios.zip"             -o renios.zip
           tar -xjf renpy-sdk.tar.bz2
-          # The renios archive already contains a top-level renios/ directory.
-          # Extract beside the SDK, not into it (which would create renios/renios).
-          unzip -q renios.zip -d .
-          test -d renios
-          test -f renios/ios.py
+          # Ren'Py's distributed Renios archive layout can vary by release.
+          # Extract it separately, then discover the actual Renios root by ios.py.
+          rm -rf renios-extract
+          mkdir renios-extract
+          unzip -q renios.zip -d renios-extract
+          RENIOS_ROOT="$(dirname "$(find "$PWD/renios-extract" -type f -name ios.py -print -quit)")"
+          if [ -z "$RENIOS_ROOT" ] || [ ! -f "$RENIOS_ROOT/ios.py" ]; then
+            echo "Unable to locate ios.py. Archive top-level layout:"
+            find renios-extract -maxdepth 3 -print | head -200
+            exit 2
+          fi
+          echo "$RENIOS_ROOT" > "$RUNNER_TEMP/renios-root"
+          echo "Renios root: $RENIOS_ROOT"
+          find "$RENIOS_ROOT" -maxdepth 2 -type f | head -80
           ls -lh renpy-sdk.tar.bz2 renios.zip
 
       - name: Create ProjectOrchid Xcode project
@@ -87,7 +96,7 @@ jobs:
           chmod +x "$SDK/renpy.sh"
           # Renios is a separate project generator, not a renpy.py command.
           # The downloaded support package includes ios.py and the prototype project.
-          RENIOS="$GITHUB_WORKSPACE/renios"
+          RENIOS="$(cat "$RUNNER_TEMP/renios-root")"
           test -f "$RENIOS/ios.py"
           test -d "$RENIOS/prototype"
           cd "$RENIOS"
