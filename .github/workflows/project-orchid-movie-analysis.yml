@@ -374,6 +374,79 @@ jobs:
           print("Timeline entries with visuals:",sum(bool(e["visuals"]) for e in timeline))
           print("Timeline entries with audio:",sum(bool(e["audio"]) for e in timeline))
           print("First-pass runtime seconds:",total)
+          # Seventh pass: extract dialogue-like RenPy statements and assign reading time.
+          dialogue_by_label={}
+          say_re=re.compile(r'^\\s*(?:(?P<speaker>[A-Za-z_][A-Za-z0-9_.]*)\\s+)?(?P<quote>["\\x27])(?P<text>.*)(?P=quote)\\s*          PY
+          python3 "$RUNNER_TEMP/analyse.py"
+
+      - name: Upload movie analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Movie-Analysis
+          path: movie-analysis/
+          retention-days: 30
+)
+          for fn in story_files:
+              active=None
+              for n,line in enumerate(fn.read_text(errors="ignore").splitlines(),1):
+                  lm=label_re.match(line)
+                  if lm:
+                      active=lm.group(1)
+                      continue
+                  if not active:
+                      continue
+                  sm=say_re.match(line)
+                  if not sm:
+                      continue
+                  raw=sm.group("text").strip()
+                  if not raw:
+                      continue
+                  if re.search(r'\\.(webp|webm|png|jpg|jpeg|mp3|ogg|opus|wav|mp4)          PY
+          python3 "$RUNNER_TEMP/analyse.py"
+
+      - name: Upload movie analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Movie-Analysis
+          path: movie-analysis/
+          retention-days: 30
+,raw,re.I):
+                      continue
+                  clean=re.sub(r'{[^}]*}','',raw)
+                  clean=re.sub(r'\\[[^]]*\\]','',clean).strip()
+                  words=re.findall(r"[A-Za-z0-9_]+(?:[-\\x27][A-Za-z0-9_]+)*",clean)
+                  if not words:
+                      continue
+                  seconds=max(1.6,min(8.0,len(words)/3.5))
+                  dialogue_by_label.setdefault(active,[]).append({
+                      "speaker":sm.group("speaker") or "narration",
+                      "text":raw,"file":str(fn),"line":n,
+                      "duration_seconds":round(seconds,2)
+                  })
+          dialogue_count=0
+          for e in timeline:
+              e["dialogue"]=dialogue_by_label.get(e["label"],[])
+              dialogue_count+=len(e["dialogue"])
+              dialogue_time=sum(d["duration_seconds"] for d in e["dialogue"])
+              if e["dialogue"]:
+                  e["duration_seconds"]=round(max(e["duration_seconds"] or 0,dialogue_time),2)
+                  e["editorial_status"]="dialogue-timed"
+          total=round(sum(e["duration_seconds"] for e in timeline),2)
+          Path("movie-analysis/main-film-timeline.json").write_text(json.dumps({
+              "version":3,
+              "status":"dialogue-timed structural draft",
+              "estimated_runtime_seconds":total,
+              "dialogue_lines":dialogue_count,
+              "entries":timeline,
+          },indent=2))
+          Path("movie-analysis/dialogue-timing-summary.json").write_text(json.dumps({
+              "dialogue_lines":dialogue_count,
+              "timeline_entries_with_dialogue":sum(bool(e["dialogue"]) for e in timeline),
+              "estimated_runtime_seconds":total,
+          },indent=2))
+          print("Dialogue lines extracted:",dialogue_count)
+          print("Timeline entries with dialogue:",sum(bool(e["dialogue"]) for e in timeline))
+          print("Dialogue-aware runtime seconds:",total)
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
