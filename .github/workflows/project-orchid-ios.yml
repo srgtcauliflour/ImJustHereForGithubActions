@@ -121,7 +121,8 @@ jobs:
           cp -R renios-extract/renios "$SDK/renios"
 
           rm -rf ProjectOrchid-iOS
-          "$SDK/renpy.sh" launcher ios_create "$GITHUB_WORKSPACE/recovered" "$GITHUB_WORKSPACE/ProjectOrchid-iOS"
+          test -d "$SDK/launcher"
+          "$SDK/renpy.sh" "$SDK/launcher" ios_create "$GITHUB_WORKSPACE/recovered" "$GITHUB_WORKSPACE/ProjectOrchid-iOS"
 
           PBX="ProjectOrchid-iOS/ProjectOrchid.xcodeproj/project.pbxproj"
           if [ ! -f "$PBX" ]; then
