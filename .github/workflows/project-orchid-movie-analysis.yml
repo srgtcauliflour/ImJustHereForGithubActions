@@ -274,6 +274,59 @@ jobs:
           print("Editorial route decisions:",len(route))
           print("Optional scene candidates:",len(optional))
           print("Effectively equivalent choices:",len(equivalent))
+
+          # Fifth pass: generate a deterministic draft route-selection dossier.
+          # This does NOT pretend to understand prose semantically; it ranks
+          # structural continuity and retained unique media so the next pass can
+          # make an evidence-backed editorial selection.
+          route_dossier=[]
+          for row in enriched:
+              scored=[]
+              for b in row["branches"]:
+                  # Prefer continuity/coverage while giving unique visual
+                  # material a modest bonus. Keep component scores transparent.
+                  continuity=b["reachable_labels"]
+                  narrative=b["exclusive_labels"]
+                  visual=b["exclusive_media"]
+                  score=continuity + narrative*2 + visual*3
+                  scored.append({**b,"structural_score":score})
+              scored.sort(key=lambda x:(-x["structural_score"],x["target"]))
+              route_dossier.append({
+                  "choice_label":row["label"],
+                  "reconverges":row.get("reconverges"),
+                  "reconvergence_label":row.get("reconvergence_label"),
+                  "candidates":scored,
+                  "draft_structural_pick":scored[0]["target"] if scored else None,
+                  "status":"requires editorial story review",
+              })
+          Path("movie-analysis/main-route-dossier.json").write_text(json.dumps(route_dossier,indent=2))
+
+          # Produce the first timeline manifest schema. At this stage entries are
+          # chapter/label structural beats; subsequent passes resolve each beat
+          # to images/video/audio/dialogue and concrete durations.
+          timeline=[]
+          order=0
+          for ch in chapters:
+              for label in ch["labels"]:
+                  order+=1
+                  timeline.append({
+                      "order":order,
+                      "chapter":ch["chapter"],
+                      "label":label,
+                      "route_decision":label in {x["choice_label"] for x in route_dossier},
+                      "visuals":[],
+                      "audio":[],
+                      "dialogue":[],
+                      "duration_seconds":None,
+                      "editorial_status":"structural",
+                  })
+          Path("movie-analysis/main-film-timeline.json").write_text(json.dumps({
+              "version":1,
+              "status":"structural draft",
+              "entries":timeline,
+          },indent=2))
+          print("Main-route dossiers:",len(route_dossier))
+          print("Structural timeline entries:",len(timeline))
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
