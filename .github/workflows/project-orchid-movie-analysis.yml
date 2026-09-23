@@ -213,6 +213,67 @@ jobs:
                      f"- Structural labels: {len(ch['labels'])}",
                      f"- Film-critical choice candidates: {len(ch['film_critical_choice_labels'])}",""]
           Path("movie-analysis/MAIN_FILM_STRUCTURE.md").write_text("\\n".join(md))
+
+          # Fourth pass: enrich the 13 film-critical candidates with downstream
+          # impact. This gives the editor evidence for selecting the linear route
+          # without simply preferring the longest branch.
+          media_by_label={}
+          for m in media:
+              media_by_label.setdefault(m["label"],set()).add(m.get("media") or m.get("ref") or str(m))
+          def reachable(start,limit=160):
+              d=distances(start,limit)
+              return set(d)
+          enriched=[]
+          for row in film_candidates:
+              ts=row["explicit_targets"]
+              reach={t:reachable(t) for t in ts if t in labels}
+              union=set().union(*reach.values()) if reach else set()
+              common=set.intersection(*reach.values()) if reach else set()
+              branch_data=[]
+              for t,nodes in reach.items():
+                  unique=nodes-common
+                  refs=set()
+                  for n in nodes: refs |= media_by_label.get(n,set())
+                  unique_refs=set()
+                  for n in unique: unique_refs |= media_by_label.get(n,set())
+                  branch_data.append({
+                      "target":t,
+                      "reachable_labels":len(nodes),
+                      "exclusive_labels":len(unique),
+                      "reachable_media":len(refs),
+                      "exclusive_media":len(unique_refs),
+                      "sample_exclusive_labels":sorted(unique)[:20],
+                  })
+              enriched.append({
+                  **row,
+                  "downstream_union_labels":len(union),
+                  "downstream_common_labels":len(common),
+                  "branches":branch_data,
+              })
+          Path("movie-analysis/film-critical-impact.json").write_text(json.dumps(enriched,indent=2))
+
+          # Editorial classification: keep consequential branches for route
+          # selection, flag small-but-unique branches as montage/optional-scene
+          # candidates, and identify effectively equivalent choices.
+          route=[]; optional=[]; equivalent=[]
+          for row in enriched:
+              b=row["branches"]
+              max_unique=max([x["exclusive_labels"] for x in b] or [0])
+              max_media=max([x["exclusive_media"] for x in b] or [0])
+              depth=row.get("reconvergence_depth") or 999
+              if row.get("reconverges") and depth <= 6 and max_unique <= 3:
+                  (optional if max_media else equivalent).append(row)
+              else:
+                  route.append(row)
+          classification={
+              "route_decisions":route,
+              "optional_scene_candidates":optional,
+              "effectively_equivalent":equivalent,
+          }
+          Path("movie-analysis/editorial-classification.json").write_text(json.dumps(classification,indent=2))
+          print("Editorial route decisions:",len(route))
+          print("Optional scene candidates:",len(optional))
+          print("Effectively equivalent choices:",len(equivalent))
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
