@@ -327,6 +327,53 @@ jobs:
           },indent=2))
           print("Main-route dossiers:",len(route_dossier))
           print("Structural timeline entries:",len(timeline))
+
+          # Sixth pass: resolve literal media references onto structural beats
+          # and assign first-pass screen-time estimates. Dialogue extraction is
+          # intentionally conservative; this stage makes the timeline render-
+          # oriented without inventing content that is not in the scripts.
+          timeline_by_label={x["label"]:x for x in timeline}
+          for m in media:
+              e=timeline_by_label.get(m["label"])
+              if not e: continue
+              ref=m.get("media") or m.get("ref")
+              if not ref: continue
+              low=str(ref).lower()
+              if low.endswith((".mp3",".ogg",".opus",".wav")):
+                  e["audio"].append(ref)
+              else:
+                  e["visuals"].append(ref)
+          for e in timeline:
+              e["visuals"]=list(dict.fromkeys(e["visuals"]))
+              e["audio"]=list(dict.fromkeys(e["audio"]))
+              videos=[x for x in e["visuals"] if str(x).lower().endswith((".webm",".mp4"))]
+              stills=[x for x in e["visuals"] if x not in videos]
+              # Editing baseline only; actual durations will later be replaced
+              # by dialogue/audio/video-aware timing.
+              if videos:
+                  e["duration_seconds"]=max(6, len(videos)*3)
+                  e["webm_cycle_minimum"]=3
+              elif stills:
+                  e["duration_seconds"]=max(3, min(12, len(stills)*2.5))
+              else:
+                  e["duration_seconds"]=2
+              e["editorial_status"]="media-resolved" if e["visuals"] or e["audio"] else "structural"
+          total=sum(e["duration_seconds"] for e in timeline)
+          Path("movie-analysis/main-film-timeline.json").write_text(json.dumps({
+              "version":2,
+              "status":"media-resolved structural draft",
+              "estimated_runtime_seconds":total,
+              "entries":timeline,
+          },indent=2))
+          Path("movie-analysis/media-resolved-summary.json").write_text(json.dumps({
+              "timeline_entries":len(timeline),
+              "entries_with_visuals":sum(bool(e["visuals"]) for e in timeline),
+              "entries_with_audio":sum(bool(e["audio"]) for e in timeline),
+              "estimated_runtime_seconds":total,
+          },indent=2))
+          print("Timeline entries with visuals:",sum(bool(e["visuals"]) for e in timeline))
+          print("Timeline entries with audio:",sum(bool(e["audio"]) for e in timeline))
+          print("First-pass runtime seconds:",total)
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
