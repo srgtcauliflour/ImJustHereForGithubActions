@@ -122,9 +122,51 @@ jobs:
                   "target_count":len(targets),
                   "likely_story_altering": len(targets)>1,
               })
+          # Third pass: quantify whether branches quickly reconverge. This is
+          # the useful distinction for the film: a menu can jump to different
+          # labels without creating a materially different storyline.
+          graph={}
+          for e in edges:
+              if e["to"] in labels:
+                  graph.setdefault(e["from"],set()).add(e["to"])
+
+          def distances(start,limit=80):
+              d={start:0}; q=[start]
+              for n in q:
+                  if d[n] >= limit: continue
+                  for nxt in graph.get(n,()):
+                      if nxt not in d:
+                          d[nxt]=d[n]+1; q.append(nxt)
+              return d
+
+          for row in critical:
+              ts=row["explicit_targets"]
+              row["reconverges"]=None
+              row["reconvergence_label"]=None
+              row["reconvergence_depth"]=None
+              row["unique_label_counts"]={}
+              if len(ts)>=2 and all(t in labels for t in ts):
+                  ds=[distances(t) for t in ts]
+                  common=set(ds[0])
+                  for d in ds[1:]: common &= set(d)
+                  common -= set(ts)
+                  if common:
+                      meet=min(common,key=lambda n:(max(d[n] for d in ds),sum(d[n] for d in ds),n))
+                      depth=max(d[meet] for d in ds)
+                      row["reconverges"]=True
+                      row["reconvergence_label"]=meet
+                      row["reconvergence_depth"]=depth
+                      for t,d in zip(ts,ds):
+                          row["unique_label_counts"][t]=sum(1 for n,dd in d.items() if dd < d[meet] and n not in common)
+                  else:
+                      row["reconverges"]=False
+
           Path("movie-analysis/choice-review.json").write_text(json.dumps(critical,indent=2))
+          film_candidates=[x for x in critical if x["target_count"]>1 and (x["reconverges"] is False or (x["reconvergence_depth"] or 0)>4)]
+          Path("movie-analysis/film-critical-choices.json").write_text(json.dumps(film_candidates,indent=2))
           print("Choice groups:",len(critical))
           print("Likely story-altering groups:",sum(1 for x in critical if x["likely_story_altering"]))
+          print("Film-critical candidates after convergence analysis:",len(film_candidates))
           PY
           python3 "$RUNNER_TEMP/analyse.py"
 
