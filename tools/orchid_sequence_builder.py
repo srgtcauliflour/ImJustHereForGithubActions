@@ -26,7 +26,7 @@ for e in entries:
 # Split on chapter changes; these become independently renderable jobs.
 chapters=[]; cur=None
 for item in seq:
- ch=item.get("chapter") or "unknown"
+ ch=item.get("chapter") or "unknown"\n # Normalize chapter identifiers inferred from labels when upstream metadata is absent.\n if ch=="unknown":\n  mm=re.search(r"v0?(\\d+)", str(item.get("label","")), re.I)\n  ch=("v%02d"%int(mm.group(1))) if mm else "unknown"
  if cur is None or cur["chapter"]!=ch:
   cur={"chapter":ch,"sequence":[]}; chapters.append(cur)
  cur["sequence"].append(item)
