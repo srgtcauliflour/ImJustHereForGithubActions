@@ -1,0 +1,43 @@
+name: ProjectOrchid Route Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-route:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download last known-good movie analysis
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 36003141721
+          name: ProjectOrchid-Movie-Analysis
+          path: movie-analysis
+
+      - name: Build main-film route
+        run: |
+          set -euxo pipefail
+          python3 -m py_compile tools/orchid_route_builder.py
+          python3 tools/orchid_route_builder.py movie-analysis
+          echo "Route build completed without re-downloading the source APK."
+
+      - name: Upload route package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Main-Route
+          path: |
+            movie-analysis/main-route-render-manifest.json
+            movie-analysis/route-review.json
+            movie-analysis/main-route-dossier.json
+            movie-analysis/main-film-timeline.json
+            movie-analysis/symbolic-media-summary.json
+          if-no-files-found: error
+          compression-level: 9
