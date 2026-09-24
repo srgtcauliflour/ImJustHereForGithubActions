@@ -267,9 +267,26 @@ jobs:
           mkdir -p ipa/Payload
           cp -R "$APP" "ipa/Payload/${APP_NAME}.app"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "ipa/Payload/${APP_NAME}.app/Info.plist" || true
-          ditto -c -k --sequesterRsrc --keepParent ipa/Payload ProjectOrchid.ipa.tmp.zip
+          # IPA is a ZIP whose archive root must contain Payload/, not an
+          # additional parent directory. Use zip directly for maximum
+          # compatibility with on-device signing/extraction apps.
           rm -f ProjectOrchid.ipa
-          mv ProjectOrchid.ipa.tmp.zip ProjectOrchid.ipa
+          (
+            cd ipa
+            /usr/bin/zip -qry -X "$GITHUB_WORKSPACE/ProjectOrchid.ipa" Payload
+          )
+
+          # Validate the exact archive structure before upload.
+          unzip -t ProjectOrchid.ipa
+          ROOT_APP="$(unzip -Z1 ProjectOrchid.ipa | awk -F/ '/^Payload\/[^/]+\.app\/$/{print; exit}')"
+          test -n "$ROOT_APP"
+          test "$(unzip -Z1 ProjectOrchid.ipa | grep -c '^Payload/')" -gt 10
+          if unzip -Z1 ProjectOrchid.ipa | grep -q '^ipa/'; then
+            echo "ERROR: IPA contains an invalid extra ipa/ root directory"
+            exit 1
+          fi
+          echo "IPA root app: $ROOT_APP"
+          unzip -Z1 ProjectOrchid.ipa | head -40 || true
           ls -lh ProjectOrchid.ipa
           shasum -a 256 ProjectOrchid.ipa
 
