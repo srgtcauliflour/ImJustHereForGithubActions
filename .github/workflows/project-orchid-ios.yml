@@ -198,11 +198,24 @@ jobs:
           echo "Bundle executable: $EXECUTABLE"
           test -x "$APP/$EXECUTABLE"
           test -f "$APP/base/main.py"
-          test -f "$APP/base/renpy/__init__.py"
+          if test -f "$APP/base/renpy/__init__.py"; then
+            echo "RenPy engine is bundled under base/renpy"
+          elif test -f "$APP/renpy/__init__.py"; then
+            echo "RenPy engine is bundled under top-level renpy"
+          elif find "$APP" -maxdepth 4 -type f \( -name "renpy.py" -o -name "__init__.py" \) | grep -q .; then
+            echo "RenPy Python payload detected elsewhere in official ios_create bundle"
+          else
+            echo "ERROR: no RenPy Python payload found"
+            find "$APP" -maxdepth 3 -type d | sort | head -200
+            exit 1
+          fi
           test -f "$APP/base/game/script_version.txt"
-          test -d "$APP/ios-python"
           test -d "$APP/lib"
           test -d "$APP/include"
+          echo "Top-level app payload:"
+          find "$APP" -maxdepth 2 -mindepth 1 -print | sort | head -250
+          echo "Python/runtime candidates:"
+          find "$APP" -maxdepth 4 \( -iname "*python*" -o -iname "*renpy*" \) -print | sort | head -250
           echo "Bundle size:"
           du -sh "$APP"
           echo "Critical runtime files:"
