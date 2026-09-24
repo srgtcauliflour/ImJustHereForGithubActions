@@ -29,6 +29,8 @@ jobs:
           python3 tools/orchid_route_builder.py movie-analysis
           python3 -m py_compile tools/orchid_execution_route.py
           python3 tools/orchid_execution_route.py movie-analysis
+          python3 -m py_compile tools/orchid_sequence_builder.py
+          python3 tools/orchid_sequence_builder.py movie-analysis
           echo "Route build completed without re-downloading the source APK."
 
       - name: Upload route package
@@ -38,6 +40,8 @@ jobs:
           path: |
             movie-analysis/main-route-render-manifest.json
             movie-analysis/main-route-execution-manifest.json
+            movie-analysis/main-film-ordered-sequence.json
+            movie-analysis/ordered-sequence-summary.json
             movie-analysis/route-review.json
             movie-analysis/main-route-dossier.json
             movie-analysis/main-film-timeline.json
