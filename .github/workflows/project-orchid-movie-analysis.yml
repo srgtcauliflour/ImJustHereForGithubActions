@@ -12,15 +12,37 @@ jobs:
     timeout-minutes: 60
     env:
       DRIVE_FILE_ID: 1vRsZLlwYe-5SOkawJA-bGOnBe6gA56eA
+      SOURCE_SHA256: 3d6d711f9111239a8069c6b7a070c1ba3a514a26570f6f689afe51892667e429
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download and reconstruct game
+      - name: Restore cached source APK
+        id: source-cache
+        uses: actions/cache@v4
+        with:
+          path: source.apk
+          key: orchid-source-${{ env.SOURCE_SHA256 }}
+
+      - name: Download source APK on cache miss
+        if: steps.source-cache.outputs.cache-hit != 'true'
         run: |
           set -euxo pipefail
           python3 -m venv "$RUNNER_TEMP/movie-venv"
           "$RUNNER_TEMP/movie-venv/bin/pip" install --upgrade pip gdown
-          "$RUNNER_TEMP/movie-venv/bin/python" -m gdown "https://drive.google.com/uc?id=${DRIVE_FILE_ID}" -O source.apk
+          for attempt in 1 2 3; do
+            "$RUNNER_TEMP/movie-venv/bin/python" -m gdown "https://drive.google.com/uc?id=${DRIVE_FILE_ID}" -O source.apk && break
+            rm -f source.apk
+            sleep $((attempt * 20))
+          done
+          test -s source.apk
+
+      - name: Verify source and reconstruct game
+        run: |
+          set -euxo pipefail
+          echo "${SOURCE_SHA256}  source.apk" | sha256sum -c -
+          if [ ! -x "$RUNNER_TEMP/movie-venv/bin/python" ]; then
+            python3 -m venv "$RUNNER_TEMP/movie-venv"
+          fi
           mkdir -p recovered/game
           unzip -q source.apk 'assets/x-game/*' -d apk-extract
           cp -R apk-extract/assets/x-game/. recovered/game/
