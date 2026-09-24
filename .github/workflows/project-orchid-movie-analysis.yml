@@ -379,6 +379,7 @@ jobs:
           python3 tools/orchid_dialogue_timing.py movie-analysis recovered/game
           python3 tools/orchid_event_resolver.py movie-analysis
           python3 tools/orchid_asset_resolver.py movie-analysis recovered/game
+          python3 tools/orchid_route_builder.py movie-analysis
 
       - name: Upload movie analysis
         uses: actions/upload-artifact@v4
