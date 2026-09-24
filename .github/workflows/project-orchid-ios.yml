@@ -198,9 +198,9 @@ jobs:
           echo "Bundle executable: $EXECUTABLE"
           test -x "$APP/$EXECUTABLE"
           test -f "$APP/base/main.py"
-          if test -f "$APP/base/renpy/__init__.py"; then
+          if test -d "$APP/base/renpy"; then
             echo "RenPy engine is bundled under base/renpy"
-          elif test -f "$APP/renpy/__init__.py"; then
+          elif test -d "$APP/renpy"; then
             echo "RenPy engine is bundled under top-level renpy"
           elif find "$APP" -maxdepth 4 -type f \( -name "renpy.py" -o -name "__init__.py" \) | grep -q .; then
             echo "RenPy Python payload detected elsewhere in official ios_create bundle"
