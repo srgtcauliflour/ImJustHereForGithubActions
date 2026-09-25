@@ -229,6 +229,36 @@ jobs:
           file "$APP/$EXECUTABLE"
           otool -L "$APP/$EXECUTABLE" | head -80
 
+      - name: Build Series 3 watch companion test bundle
+        run: |
+          set -euxo pipefail
+          # Series 3 is limited to watchOS 8, so build this target with an
+          # Xcode toolchain that still ships the watchOS 8 SDK/deployment support.
+          WATCH_XCODE=""
+          for X in /Applications/Xcode_16*.app /Applications/Xcode_15*.app /Applications/Xcode_14*.app; do
+            if test -d "$X"; then WATCH_XCODE="$X"; break; fi
+          done
+          if test -z "$WATCH_XCODE"; then
+            echo "ERROR: runner has no Xcode toolchain capable of targeting watchOS 8 / Series 3."
+            ls -1 /Applications | grep Xcode || true
+            exit 1
+          fi
+          echo "Using Watch toolchain: $WATCH_XCODE"
+          export DEVELOPER_DIR="$WATCH_XCODE/Contents/Developer"
+          xcodebuild -version
+          WATCH_MIN="$(xcodebuild -showsdks | sed -n 's/.*watchOS \([0-9][0-9.]*\).*/\1/p' | head -1 || true)"
+          echo "Available watch SDK marker: $WATCH_MIN"
+          if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+          pushd watch-companion
+          xcodegen generate
+          xcodebuild -project OrchidWatch.xcodeproj -scheme OrchidWatch -configuration Release -sdk watchos             -derivedDataPath "$GITHUB_WORKSPACE/build/WatchDerivedData"             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tee "$GITHUB_WORKSPACE/watch-xcodebuild.log"
+          popd
+          WATCHAPP="$(find build/WatchDerivedData/Build/Products -path '*Release-watchos/*.app' -type d -print -quit)"
+          test -n "$WATCHAPP"
+          test -f "$WATCHAPP/Info.plist"
+          echo "Watch test app: $WATCHAPP"
+          du -sh "$WATCHAPP"
+
       - name: Package unsigned IPA
         run: |
           set -euxo pipefail
