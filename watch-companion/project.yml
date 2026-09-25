@@ -1,5 +1,6 @@
 name: OrchidWatch
 options:
+  xcodeVersion: "15.4"
   deploymentTarget:
     watchOS: "8.0"
 targets:
