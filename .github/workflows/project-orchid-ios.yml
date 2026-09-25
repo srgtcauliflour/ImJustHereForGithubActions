@@ -250,15 +250,26 @@ jobs:
 
           # Validate the exact archive structure before upload.
           unzip -t ProjectOrchid.ipa
-          ROOT_APP="$(unzip -Z1 ProjectOrchid.ipa | awk -F/ '/^Payload\/[^/]+\.app\/$/{print; exit}')"
-          test -n "$ROOT_APP"
-          test "$(unzip -Z1 ProjectOrchid.ipa | grep -c '^Payload/')" -gt 10
-          if unzip -Z1 ProjectOrchid.ipa | grep -q '^ipa/'; then
-            echo "ERROR: IPA contains an invalid extra ipa/ root directory"
-            exit 1
-          fi
-          echo "IPA root app: $ROOT_APP"
-          unzip -Z1 ProjectOrchid.ipa | head -40 || true
+          # Validate with Python's ZIP parser to avoid BSD awk/grep and pipefail differences.
+          python3 - <<'PY'
+          import zipfile
+          p = "ProjectOrchid.ipa"
+          with zipfile.ZipFile(p) as z:
+              names = z.namelist()
+          apps = sorted({n.split("/", 2)[1] for n in names
+                         if n.startswith("Payload/") and len(n.split("/", 2)) >= 2
+                         and n.split("/", 2)[1].endswith(".app")})
+          payload = [n for n in names if n.startswith("Payload/")]
+          if len(apps) != 1:
+              raise SystemExit(f"ERROR: expected exactly one app under Payload, found: {apps}")
+          if len(payload) <= 10:
+              raise SystemExit(f"ERROR: suspiciously small Payload: {len(payload)} entries")
+          if any(n.startswith("ipa/") for n in names):
+              raise SystemExit("ERROR: invalid extra ipa/ root directory")
+          print("IPA root app: Payload/" + apps[0] + "/")
+          print("IPA entries:", len(names), "Payload entries:", len(payload))
+          print("\\n".join(names[:40]))
+          PY
           ls -lh ProjectOrchid.ipa
           shasum -a 256 ProjectOrchid.ipa
 
