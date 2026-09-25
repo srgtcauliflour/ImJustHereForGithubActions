@@ -152,36 +152,8 @@ jobs:
           test -d ProjectOrchid-iOS/base/game
           test -f ProjectOrchid-iOS/base/game/script_version.txt
 
-          # iPhone adaptation shim: preserve the original game, but constrain
-          # dialogue/UI to iOS safe areas and suppress Ren'Py debug/error overlays.
-          cat > ProjectOrchid-iOS/base/game/zz_orchid_ios.rpy <<'RPY'
-          init 999 python:
-              import renpy
-              # Keep mobile text away from rounded corners / home indicator.
-              try:
-                  style.say_dialogue.xmaximum = 1500
-                  style.say_dialogue.xpos = 0
-                  style.say_dialogue.xalign = 0.5
-                  style.say_dialogue.left_margin = 36
-                  style.say_dialogue.right_margin = 36
-                  style.say_dialogue.bottom_margin = 18
-                  style.say_dialogue.line_spacing = 2
-              except Exception:
-                  pass
-
-          # iOS-specific screen override. The game's authored resolution is kept;
-          # margins provide a conservative inset when Renios scales to modern iPhones.
-          style say_window:
-              left_padding 70
-              right_padding 70
-              bottom_padding 42
-
-          style say_dialogue:
-              xmaximum 1500
-          RPY
-
-          # Red Ren'Py developer overlays are useful evidence, so keep developer
-          # mode available for this diagnostic build rather than masking errors.
+          # Keep the known-good recovered game unmodified at startup. iPhone UI
+          # adaptation will be reintroduced only after the baseline is reconfirmed.
           du -sh ProjectOrchid-iOS/base
           find ProjectOrchid-iOS/base -maxdepth 2 -type f | head -80
 
