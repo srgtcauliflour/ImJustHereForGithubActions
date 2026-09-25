@@ -1,0 +1,21 @@
+name: OrchidWatch
+options:
+  deploymentTarget:
+    watchOS: "8.0"
+targets:
+  OrchidWatch:
+    type: application.watchapp2
+    platform: watchOS
+    deploymentTarget: "8.0"
+    sources:
+      - OrchidWatchApp.swift
+    info:
+      path: Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 4
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        SKIP_INSTALL: NO
