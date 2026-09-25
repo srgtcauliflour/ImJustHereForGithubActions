@@ -1,0 +1,77 @@
+name: ProjectOrchid Series 3 Watch Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-watch:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Series 3 compatible Xcode
+        run: |
+          set -euxo pipefail
+          CANDIDATES=(/Applications/Xcode_15.4.app /Applications/Xcode_15.3.app /Applications/Xcode_15.2.app /Applications/Xcode_15.1.app /Applications/Xcode_15.0.1.app)
+          X=""
+          for C in "${CANDIDATES[@]}"; do
+            if test -d "$C"; then X="$C"; break; fi
+          done
+          test -n "$X"
+          echo "DEVELOPER_DIR=$X/Contents/Developer" >> "$GITHUB_ENV"
+          "$X/Contents/Developer/usr/bin/xcodebuild" -version
+          "$X/Contents/Developer/usr/bin/xcodebuild" -showsdks
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+          xcodegen --version
+
+      - name: Generate watch project
+        working-directory: watch-companion
+        run: |
+          set -euxo pipefail
+          xcodegen generate
+          xcodebuild -project OrchidWatch.xcodeproj -list
+
+      - name: Compile unsigned Series 3 companion
+        working-directory: watch-companion
+        run: |
+          set -euxo pipefail
+          xcodebuild -project OrchidWatch.xcodeproj -scheme OrchidWatch -configuration Release -sdk watchos \
+            -derivedDataPath "$GITHUB_WORKSPACE/build/WatchDerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            WATCHOS_DEPLOYMENT_TARGET=8.0 \
+            build | tee "$GITHUB_WORKSPACE/watch-xcodebuild.log"
+
+      - name: Validate watch bundle
+        run: |
+          set -euxo pipefail
+          WATCHAPP="$(find build/WatchDerivedData/Build/Products -path '*Release-watchos/*.app' -type d -print -quit)"
+          test -n "$WATCHAPP"
+          test -f "$WATCHAPP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCHAPP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCHAPP/Info.plist"
+          mkdir -p WatchArtifact
+          ditto "$WATCHAPP" WatchArtifact/OrchidWatch.app
+          ditto -c -k --sequesterRsrc WatchArtifact OrchidWatch-Series3.zip
+          ls -lh OrchidWatch-Series3.zip
+
+      - name: Upload Series 3 test bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Series3-Watch
+          path: OrchidWatch-Series3.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload watch diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Series3-Watch-Diagnostics
+          path: |
+            watch-xcodebuild.log
+            watch-companion/OrchidWatch.xcodeproj/project.pbxproj
+          if-no-files-found: ignore
