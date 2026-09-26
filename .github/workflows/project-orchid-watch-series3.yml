@@ -68,6 +68,15 @@ jobs:
           test -f "$WATCHAPP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCHAPP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCHAPP/Info.plist"
+          EXT="$WATCHAPP/PlugIns/OrchidWatchExtension.appex"
+          test -d "$EXT"
+          test -f "$EXT/Info.plist"
+          EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$EXT/Info.plist")"
+          test -n "$EXE"
+          test -f "$EXT/$EXE"
+          file "$EXT/$EXE"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXT/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist"
           mkdir -p WatchArtifact
           ditto "$WATCHAPP" WatchArtifact/OrchidWatch.app
           ditto -c -k --sequesterRsrc WatchArtifact OrchidWatch-Series3.zip
