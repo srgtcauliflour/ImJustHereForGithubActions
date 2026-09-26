@@ -8,9 +8,15 @@ targets:
     type: application.watchapp2
     platform: watchOS
     deploymentTarget: "8.0"
-    info:
-      path: WatchApp-Info.plist
     settings:
+      base:
+        INFOPLIST_FILE: WatchApp-Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp
+        TARGETED_DEVICE_FAMILY: 4
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        SKIP_INSTALL: NO
+
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.generic.projectorchid
@@ -28,10 +34,9 @@ targets:
     deploymentTarget: "8.0"
     sources:
       - OrchidWatchApp.swift
-    info:
-      path: WatchExtension-Info.plist
     settings:
       base:
+        INFOPLIST_FILE: WatchExtension-Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp.watchkitextension
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: 4
