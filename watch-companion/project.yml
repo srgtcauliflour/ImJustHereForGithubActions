@@ -1,7 +1,6 @@
 name: OrchidWatch
 options:
   xcodeVersion: "15.4"
-  objectVersion: 56
   deploymentTarget:
     watchOS: "8.0"
 targets:
@@ -9,18 +8,33 @@ targets:
     type: application.watchapp2
     platform: watchOS
     deploymentTarget: "8.0"
-    sources:
-      - OrchidWatchApp.swift
     info:
-      path: Info.plist
+      path: WatchApp-Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp
-        SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: 4
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         SKIP_INSTALL: NO
+    dependencies:
+      - target: OrchidWatchExtension
+        embed: true
+  OrchidWatchExtension:
+    type: watchkit2-extension
+    platform: watchOS
+    deploymentTarget: "8.0"
+    sources:
+      - OrchidWatchApp.swift
+    info:
+      path: WatchExtension-Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp.watchkitextension
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 4
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        SKIP_INSTALL: YES
         ARCHS: armv7k
-        VALID_ARCHS: armv7k
         ONLY_ACTIVE_ARCH: YES
