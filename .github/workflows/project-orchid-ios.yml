@@ -41,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ProjectOrchid-Watch-Nested
-          path: watch-payload/OrchidWatch.app
+          path: watch-payload
           include-hidden-files: true
           compression-level: 0
 
@@ -239,7 +239,12 @@ jobs:
         run: |
           set -euxo pipefail
           APP="$(find build/DerivedData/Build/Products -path '*Release-iphoneos/*.app' -type d -print -quit)"
+          echo "Downloaded Watch artifact layout:"
+          find watch-nested -maxdepth 4 -print | sort | head -150
           WATCHAPP="$(find watch-nested -name 'OrchidWatch.app' -type d -print -quit)"
+          if [ -z "$WATCHAPP" ] && [ -f watch-nested/Info.plist ] && [ -d watch-nested/PlugIns/OrchidWatchExtension.appex ]; then
+            WATCHAPP="$PWD/watch-nested"
+          fi
           test -n "$APP"
           test -n "$WATCHAPP"
           test -d "$WATCHAPP/PlugIns/OrchidWatchExtension.appex"
