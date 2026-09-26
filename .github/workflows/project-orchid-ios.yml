@@ -252,8 +252,26 @@ jobs:
           rm -rf "$APP/Watch"
           mkdir -p "$APP/Watch"
           cp -R "$WATCHAPP" "$APP/Watch/OrchidWatch.app"
-          test -d "$APP/Watch/OrchidWatch.app/PlugIns/OrchidWatchExtension.appex"
-          find "$APP/Watch" -maxdepth 3 -print | sort | head -100
+
+          # Validate the exact companion relationship iOS uses for Watch discovery.
+          WATCH="$APP/Watch/OrchidWatch.app"
+          EXT="$WATCH/PlugIns/OrchidWatchExtension.appex"
+          test -d "$EXT"
+          IOS_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          WATCH_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH/Info.plist")"
+          COMPANION_ID="$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCH/Info.plist")"
+          EXT_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXT/Info.plist")"
+          WKAPP_ID="$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionAttributes:WKAppBundleIdentifier' "$EXT/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Print :NSExtension:WKAppBundleIdentifier' "$EXT/Info.plist" 2>/dev/null || true)"
+          echo "iOS=$IOS_ID Watch=$WATCH_ID Companion=$COMPANION_ID Extension=$EXT_ID WKApp=$WKAPP_ID"
+          test "$COMPANION_ID" = "$IOS_ID"
+          test "$WATCH_ID" = "$IOS_ID.watchkitapp"
+          test "$EXT_ID" = "$WATCH_ID.watchkitextension"
+          test "$WKAPP_ID" = "$WATCH_ID"
+
+          # Do not permit the companion to be marked watch-only.
+          WATCH_ONLY="$(/usr/libexec/PlistBuddy -c 'Print :WKWatchOnly' "$WATCH/Info.plist" 2>/dev/null || echo false)"
+          test "$WATCH_ONLY" != "true"
+          find "$APP/Watch" -maxdepth 4 -print | sort | head -150
 
       - name: Validate built app runtime before packaging
         run: |
