@@ -33,6 +33,14 @@ jobs:
         run: |
           set -euxo pipefail
           xcodegen generate
+          echo "Generated PBX header:"
+          head -12 OrchidWatch.xcodeproj/project.pbxproj
+          OBJ="$(sed -n 's/.*objectVersion = \([0-9][0-9]*\);.*/\1/p' OrchidWatch.xcodeproj/project.pbxproj | head -1)"
+          echo "Generated objectVersion=$OBJ"
+          if test -z "$OBJ" || test "$OBJ" -gt 60; then
+            echo "ERROR: XcodeGen emitted a project too new for Xcode 15.4"
+            exit 1
+          fi
           xcodebuild -project OrchidWatch.xcodeproj -list
 
       - name: Compile unsigned Series 3 companion
