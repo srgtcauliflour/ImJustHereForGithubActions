@@ -7,7 +7,46 @@ permissions:
   contents: read
 
 jobs:
+  build-watch:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 15.4
+        run: |
+          set -euxo pipefail
+          test -d /Applications/Xcode_15.4.app
+          echo "DEVELOPER_DIR=/Applications/Xcode_15.4.app/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+      - name: Build Series 3 companion
+        working-directory: watch-companion
+        run: |
+          set -euxo pipefail
+          xcodegen generate
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("OrchidWatch.xcodeproj/project.pbxproj"); s=p.read_text()
+          if "objectVersion = 77;" in s: p.write_text(s.replace("objectVersion = 77;", "objectVersion = 56;", 1))
+          PY
+          xcodebuild -project OrchidWatch.xcodeproj -scheme OrchidWatch -configuration Release -sdk watchos -derivedDataPath "$GITHUB_WORKSPACE/build/WatchDerivedData" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO WATCHOS_DEPLOYMENT_TARGET=8.0 build
+          WATCHAPP="$(find "$GITHUB_WORKSPACE/build/WatchDerivedData/Build/Products" -path '*Release-watchos/OrchidWatch.app' -type d -print -quit)"
+          test -n "$WATCHAPP"
+          test -d "$WATCHAPP/PlugIns/OrchidWatchExtension.appex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCHAPP/Info.plist")" = "com.generic.projectorchid"
+          mkdir -p "$GITHUB_WORKSPACE/watch-payload"
+          cp -R "$WATCHAPP" "$GITHUB_WORKSPACE/watch-payload/OrchidWatch.app"
+      - name: Upload nested Watch app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectOrchid-Watch-Nested
+          path: watch-payload/OrchidWatch.app
+          include-hidden-files: true
+          compression-level: 0
+
   build-ios:
+    needs: build-watch
     runs-on: macos-latest
     timeout-minutes: 90
     env:
@@ -190,6 +229,27 @@ jobs:
           rm -rf build
           xcodebuild             -project "${{ steps.scheme.outputs.project }}"             -scheme "${{ steps.scheme.outputs.scheme }}"             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$PWD/build/DerivedData"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM=""             PRODUCT_BUNDLE_IDENTIFIER="${BUNDLE_ID}"             build | tee xcodebuild.log
 
+      - name: Download validated Series 3 companion
+        uses: actions/download-artifact@v4
+        with:
+          name: ProjectOrchid-Watch-Nested
+          path: watch-nested
+
+      - name: Embed Series 3 companion into iPhone app
+        run: |
+          set -euxo pipefail
+          APP="$(find build/DerivedData/Build/Products -path '*Release-iphoneos/*.app' -type d -print -quit)"
+          WATCHAPP="$(find watch-nested -name 'OrchidWatch.app' -type d -print -quit)"
+          test -n "$APP"
+          test -n "$WATCHAPP"
+          test -d "$WATCHAPP/PlugIns/OrchidWatchExtension.appex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCHAPP/Info.plist")" = "$BUNDLE_ID"
+          rm -rf "$APP/Watch"
+          mkdir -p "$APP/Watch"
+          cp -R "$WATCHAPP" "$APP/Watch/OrchidWatch.app"
+          test -d "$APP/Watch/OrchidWatch.app/PlugIns/OrchidWatchExtension.appex"
+          find "$APP/Watch" -maxdepth 3 -print | sort | head -100
+
       - name: Validate built app runtime before packaging
         run: |
           set -euxo pipefail
@@ -215,6 +275,9 @@ jobs:
           test -f "$APP/base/game/script_version.txt"
           test -d "$APP/base/lib"
           test -d "$APP/base/lib/python3.12"
+          test -d "$APP/Watch/OrchidWatch.app"
+          test -d "$APP/Watch/OrchidWatch.app/PlugIns/OrchidWatchExtension.appex"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$APP/Watch/OrchidWatch.app/Info.plist")" = "$BUNDLE_ID"
           echo "Top-level app payload:"
           find "$APP" -maxdepth 2 -mindepth 1 -print | sort | head -250
           echo "Python/runtime candidates:"
