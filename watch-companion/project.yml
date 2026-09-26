@@ -13,6 +13,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.generic.projectorchid.watchkitapp
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.generic.projectorchid
+        INFOPLIST_KEY_WKWatchKitApp: YES
         TARGETED_DEVICE_FAMILY: 4
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
