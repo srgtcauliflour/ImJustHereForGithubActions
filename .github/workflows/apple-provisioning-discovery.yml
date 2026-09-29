@@ -1,0 +1,77 @@
+name: Apple Provisioning Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Query Apple Developer resources
+        env:
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for v in APPLE_ISSUER_ID APPLE_KEY_ID APPLE_API_PRIVATE_KEY; do
+            test -n "${!v:-}" || { echo "::error::Missing GitHub secret: $v"; exit 1; }
+          done
+          python3 - <<'PY'
+          import os, time, json, base64, urllib.request, urllib.error, subprocess, tempfile
+          issuer=os.environ["APPLE_ISSUER_ID"].strip()
+          kid=os.environ["APPLE_KEY_ID"].strip()
+          key=os.environ["APPLE_API_PRIVATE_KEY"].replace("\\n","\n").strip()+"\n"
+          def b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+          now=int(time.time())
+          header=b64(json.dumps({"alg":"ES256","kid":kid,"typ":"JWT"},separators=(",",":")).encode())
+          payload=b64(json.dumps({"iss":issuer,"iat":now-5,"exp":now+900,"aud":"appstoreconnect-v1"},separators=(",",":")).encode())
+          unsigned=f"{header}.{payload}"
+          with tempfile.NamedTemporaryFile("w",suffix=".p8",delete=False) as k: k.write(key); kp=k.name
+          with tempfile.NamedTemporaryFile("wb",delete=False) as d: d.write(unsigned.encode()); dp=d.name
+          sig=subprocess.check_output(["openssl","dgst","-sha256","-sign",kp,dp])
+          # OpenSSL emits DER ECDSA; JWT requires raw R||S.
+          def der_raw(x):
+            i=2
+            if x[1]&0x80: i=2+(x[1]&0x7f)
+            assert x[i]==2; la=x[i+1]; a=x[i+2:i+2+la]; i+=2+la
+            assert x[i]==2; lb=x[i+1]; b=x[i+2:i+2+lb]
+            return a.lstrip(b"\0").rjust(32,b"\0")+b.lstrip(b"\0").rjust(32,b"\0")
+          token=unsigned+"."+b64(der_raw(sig))
+          headers={"Authorization":"Bearer "+token}
+          def get(path):
+            req=urllib.request.Request("https://api.appstoreconnect.apple.com"+path,headers=headers)
+            with urllib.request.urlopen(req) as r: return json.load(r)
+          def all_items(path):
+            out=[]
+            while path:
+              d=get(path); out+=d.get("data",[])
+              nxt=d.get("links",{}).get("next")
+              path=nxt.replace("https://api.appstoreconnect.apple.com","") if nxt else None
+            return out
+          devices=all_items("/v1/devices?limit=200")
+          bundles=all_items("/v1/bundleIds?limit=200")
+          certs=all_items("/v1/certificates?limit=200")
+          profiles=all_items("/v1/profiles?limit=200")
+          wanted={"com.generic.projectorchid","com.generic.projectorchid.watchkitapp","com.generic.projectorchid.watchkitapp.watchkitextension"}
+          print("=== DEVICES (safe metadata; UDIDs intentionally omitted) ===")
+          for x in devices:
+            a=x["attributes"]; print(json.dumps({"name":a.get("name"),"platform":a.get("platform"),"status":a.get("status"),"deviceClass":a.get("deviceClass"),"model":a.get("model")},sort_keys=True))
+          print("\n=== PROJECTORCHID BUNDLE IDS ===")
+          for x in bundles:
+            a=x["attributes"]
+            if a.get("identifier") in wanted: print(json.dumps({"id":x["id"],"identifier":a.get("identifier"),"name":a.get("name"),"platform":a.get("platform")},sort_keys=True))
+          print("\n=== CERTIFICATES ===")
+          for x in certs:
+            a=x["attributes"]; print(json.dumps({"id":x["id"],"name":a.get("name"),"certificateType":a.get("certificateType"),"expirationDate":a.get("expirationDate")},sort_keys=True))
+          print("\n=== PROFILES ===")
+          for x in profiles:
+            a=x["attributes"]
+            print(json.dumps({"id":x["id"],"name":a.get("name"),"profileType":a.get("profileType"),"profileState":a.get("profileState"),"expirationDate":a.get("expirationDate")},sort_keys=True))
+          print(f"\nTotals: devices={len(devices)} bundles={len(bundles)} certificates={len(certs)} profiles={len(profiles)}")
+          PY
