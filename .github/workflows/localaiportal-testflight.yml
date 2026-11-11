@@ -1,0 +1,83 @@
+name: LocalAIPortal TestFlight
+
+# Builds the iOS app from srgtcauliflour/LocalAIPortal and uploads it to
+# TestFlight, using this repository's Apple API key secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: Bundle ID for the app
+        required: true
+        default: com.srgtcauliflour.localaiportal
+      ref:
+        description: Branch or commit of LocalAIPortal to build
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localaiportal-testflight
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    env:
+      APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+      APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+      APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+      BUNDLE_ID: ${{ inputs.bundle_id }}
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - name: Check out LocalAIPortal
+        uses: actions/checkout@v4
+        with:
+          repository: srgtcauliflour/LocalAIPortal
+          ref: ${{ inputs.ref }}
+
+      - name: Check that the Apple secrets are set
+        run: |
+          for name in APPLE_KEY_ID APPLE_ISSUER_ID APPLE_API_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "::error::Missing GitHub secret: $name"; exit 1; }
+          done
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install the Metal toolchain (needed by MLX)
+        run: xcodebuild -downloadComponent MetalToolchain || true
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Build, sign and upload
+        run: bundle exec fastlane beta
+
+      - name: Summarise compile errors
+        if: failure()
+        run: |
+          {
+            echo "### Build errors"
+            echo '```'
+            grep -h -E "error:|fatal error" "$HOME"/Library/Logs/gym/*.log 2>/dev/null | sort -u | head -60 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the full build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: localaiportal-build-log
+          path: ~/Library/Logs/gym/*.log
+          if-no-files-found: ignore
